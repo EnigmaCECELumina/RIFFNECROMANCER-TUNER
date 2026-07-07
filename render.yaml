@@ -1,22 +1,18 @@
 services:
-  # 1. Node.js/Express Backend
+  # 1. Python/FastAPI Backend
   - type: web
     name: rune-ritual-backend
-    env: node
+    env: python
     plan: free
-    buildCommand: npm install
-    startCommand: npm start
-    envVars:
-      - key: NODE_ENV
-        value: production
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
 
-  # 2. React/Next.js Frontend
+  # 2. React Frontend
   - type: web
     name: rune-ritual-frontend
     env: node
     plan: free
+    rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm start
-    envVars:
-      - key: NODE_ENV
-        value: production

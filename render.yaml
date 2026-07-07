@@ -4,7 +4,6 @@ services:
     name: rune-ritual-backend
     env: node
     plan: free
-    rootDir: backend
     buildCommand: npm install
     startCommand: npm start
     envVars:
@@ -16,7 +15,6 @@ services:
     name: rune-ritual-frontend
     env: node
     plan: free
-    rootDir: frontend
     buildCommand: npm install && npm run build
     startCommand: npm start
     envVars:

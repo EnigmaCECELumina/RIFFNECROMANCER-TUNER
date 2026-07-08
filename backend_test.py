@@ -2,12 +2,21 @@
 RiffNecromancer Backend API Test Suite
 Tests all endpoints with premium/free user scenarios
 """
+import os
 import requests
 import sys
 from datetime import datetime
 from typing import Optional, Dict, Any
 
-BASE_URL = "https://tone-ritual-lab.preview.emergentagent.com/api"
+BASE_URL = os.environ.get(
+    "TEST_BASE_URL", "https://tone-ritual-lab.preview.emergentagent.com/api"
+)
+
+# Demo credentials come from the environment so real passwords are never
+# committed to the repo. These must match the values used to seed the demo
+# accounts (DEMO_PREMIUM_PASSWORD / DEMO_FREE_PASSWORD).
+DEMO_PREMIUM_PASSWORD = os.environ.get("DEMO_PREMIUM_PASSWORD")
+DEMO_FREE_PASSWORD = os.environ.get("DEMO_FREE_PASSWORD")
 
 class RiffNecromancerTester:
     def __init__(self):
@@ -123,10 +132,13 @@ class RiffNecromancerTester:
     def test_auth_login_demo(self):
         """Test login with demo premium account"""
         self.log("\n=== AUTH: LOGIN (DEMO PREMIUM) ===", "INFO")
+        if not DEMO_PREMIUM_PASSWORD:
+            self.log("DEMO_PREMIUM_PASSWORD not set; skipping demo premium login test", "WARN")
+            return
         success, resp = self.run_test(
             "POST /auth/login with demo@riffnecromancer.com returns JWT + premium user",
             "POST", "auth/login", 200,
-            data={"email": "demo@riffnecromancer.com", "password": "RiffDemo!2026"}
+            data={"email": "demo@riffnecromancer.com", "password": DEMO_PREMIUM_PASSWORD}
         )
         if success and isinstance(resp, dict):
             if "access_token" in resp and "user" in resp:
@@ -144,10 +156,13 @@ class RiffNecromancerTester:
     def test_auth_login_free(self):
         """Test login with free account"""
         self.log("\n=== AUTH: LOGIN (FREE) ===", "INFO")
+        if not DEMO_FREE_PASSWORD:
+            self.log("DEMO_FREE_PASSWORD not set; skipping demo free login test", "WARN")
+            return
         success, resp = self.run_test(
             "POST /auth/login with free@riffnecromancer.com returns JWT + free user",
             "POST", "auth/login", 200,
-            data={"email": "free@riffnecromancer.com", "password": "RiffFree!2026"}
+            data={"email": "free@riffnecromancer.com", "password": DEMO_FREE_PASSWORD}
         )
         if success and isinstance(resp, dict):
             if "access_token" in resp and "user" in resp:

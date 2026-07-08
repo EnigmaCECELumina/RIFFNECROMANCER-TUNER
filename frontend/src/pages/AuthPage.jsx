@@ -118,10 +118,6 @@ export default function AuthPage() {
           <Button onClick={startGoogle} variant="secondary" data-testid="google-oauth-button" className="w-full bg-[hsl(var(--secondary))]/80 ring-1 ring-[hsl(var(--border))] hover:bg-[hsl(var(--secondary))] uppercase tracking-[0.18em]">
             Continue with Google
           </Button>
-
-          <p className="mt-5 text-[11px] text-[hsl(var(--text-3))] text-center">
-            Demo: <span className="text-[hsl(var(--text-2))]">demo@riffnecromancer.com</span> · <span className="text-[hsl(var(--text-2))]">RiffDemo!2026</span>
-          </p>
         </div>
       </main>
     </div>

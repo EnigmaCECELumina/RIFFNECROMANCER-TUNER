@@ -57,7 +57,7 @@ await page.context.add_cookies([{
 
 A standard `/api/auth/register` and `/api/auth/login` endpoint is available with JWT bearer tokens for testing-without-OAuth scenarios.
 
-Demo seed account (auto-created at startup):
-- email: demo@riffnecromancer.test
-- password: RiffDemo!2026
+Demo seed account (only created when `SEED_DEMO_USERS` is enabled):
+- email: demo@riffnecromancer.com
+- password: value of the `DEMO_PREMIUM_PASSWORD` environment variable (never commit real credentials)
 - is_premium: true (for testing premium content)

@@ -3,6 +3,7 @@ import { Link } from "react-router-dom";
 import PageContainer from "@/components/PageContainer";
 import { api } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
+import { toast } from "sonner";
 import { Gauge, Music2, Flame, Mic2, Sliders, CalendarDays, Crown, Play, Pause, Upload, Sparkles, MessageCircle, ArrowUp } from "lucide-react";
 
 export default function Dashboard() {
@@ -33,7 +34,10 @@ export default function Dashboard() {
         setProgress(p);
         setSessions(s);
         if (cal?.stats) setStreak(cal.stats);
-      } catch {}
+      } catch (e) {
+        console.error("Failed to load dashboard data", e);
+        toast.error("Could not load your dashboard");
+      }
     })();
   }, []);
 

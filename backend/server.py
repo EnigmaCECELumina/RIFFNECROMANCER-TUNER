@@ -240,6 +240,8 @@ def parse_iso_utc(value: Any) -> Optional[datetime]:
         try:
             dt = datetime.fromisoformat(value)
         except (ValueError, TypeError):
+            # Surface data-integrity issues instead of silently dropping them.
+            logger.warning("Could not parse ISO datetime from %r", value)
             return None
     if dt.tzinfo is None:
         dt = dt.replace(tzinfo=timezone.utc)
@@ -274,7 +276,10 @@ def hash_password(pw: str) -> str:
 def verify_password(pw: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
+    except (ValueError, TypeError):
+        # Malformed/corrupt stored hash. Treat as auth failure but surface it —
+        # a persistently unverifiable hash is a data-integrity problem.
+        logger.warning("Password verification failed due to malformed stored hash")
         return False
 
 def create_jwt(user_id: str) -> str:
@@ -340,14 +345,15 @@ async def current_user_optional(
         u = await get_user_by_session_token(bearer)
         if u:
             return u
-        # Try JWT
+        # Try JWT. Invalid/expired tokens are an expected auth outcome (return
+        # no user); only swallow JWT errors, not unexpected bugs.
         try:
             payload = jwt.decode(bearer, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             uid = payload.get("sub")
             if uid:
                 return await get_user_by_id(uid)
-        except Exception:
-            pass
+        except jwt.PyJWTError as e:
+            logger.debug("Bearer JWT rejected: %s", e)
     return None
 
 async def current_user_required(user=Depends(current_user_optional)) -> Dict[str, Any]:

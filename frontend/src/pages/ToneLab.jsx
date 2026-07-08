@@ -88,7 +88,10 @@ export default function ToneLab() {
       try {
         const { data } = await api.get(`/tone/presets?genre=${encodeURIComponent(genre)}`);
         setPresets(data);
-      } catch { /* noop */ }
+      } catch (e) {
+        console.error("Failed to load tone presets", e);
+        toast.error("Could not load tone presets");
+      }
     })();
   }, [genre]);
 

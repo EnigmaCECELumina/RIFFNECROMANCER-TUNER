@@ -4,6 +4,7 @@ import PageContainer from "@/components/PageContainer";
 import LessonCard from "@/components/LessonCard";
 import PaywallDialog from "@/components/PaywallDialog";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 export default function Vocal() {
   const navigate = useNavigate();
@@ -16,7 +17,10 @@ export default function Vocal() {
       try {
         const { data } = await api.get("/lessons?category=vocal");
         setLessons(data);
-      } catch {}
+      } catch (e) {
+        console.error("Failed to load vocal lessons", e);
+        toast.error("Could not load vocal rituals");
+      }
     })();
   }, []);
 

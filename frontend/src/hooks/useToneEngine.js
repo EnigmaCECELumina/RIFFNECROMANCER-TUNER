@@ -292,7 +292,9 @@ export function useToneEngine() {
           c.feedback.gain.value = next.delay_feedback;
           c.delayWet.gain.value = next.delay_enabled ? next.delay_mix : 0;
           c.reverbWet.gain.value = next.reverb_enabled ? next.reverb_mix : 0;
-        } catch (e) { /* noop */ }
+        } catch (e) {
+          console.error("Failed to apply tone params", e);
+        }
       }
       return next;
     });

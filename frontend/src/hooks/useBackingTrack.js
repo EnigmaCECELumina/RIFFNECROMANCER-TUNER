@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createAudioContext } from "@/lib/audio";
 
 // Note frequencies (Drop D relevant + neighbors)
 export const NOTES = {
@@ -26,8 +27,7 @@ export function useBackingTrack() {
 
   const start = useCallback(async (opts = {}) => {
     optsRef.current = { ...optsRef.current, ...opts };
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = ctxRef.current || new Ctx();
+    const ctx = ctxRef.current || await createAudioContext();
     ctxRef.current = ctx;
     if (ctx.state === "suspended") await ctx.resume();
 

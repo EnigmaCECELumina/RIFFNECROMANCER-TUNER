@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { getMicStream, stopStream } from "@/lib/audio";
 
 export function useLessonRecorder() {
   const [recording, setRecording] = useState(false);
@@ -32,7 +33,7 @@ export function useLessonRecorder() {
       setDurationSeconds(0);
       chunksRef.current = [];
 
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const stream = await getMicStream(true);
       streamRef.current = stream;
       const recorder = new MediaRecorder(stream);
       recorderRef.current = recorder;
@@ -46,7 +47,7 @@ export function useLessonRecorder() {
         const nextUrl = URL.createObjectURL(blob);
         urlRef.current = nextUrl;
         setAudioUrl(nextUrl);
-        stream.getTracks().forEach((track) => track.stop());
+        stopStream(stream);
         streamRef.current = null;
         recorderRef.current = null;
       };
@@ -68,7 +69,7 @@ export function useLessonRecorder() {
     try {
       if (recorderRef.current?.state === "recording") recorderRef.current.stop();
     } catch {
-      streamRef.current?.getTracks?.().forEach((track) => track.stop());
+      stopStream(streamRef.current);
     }
     setRecording(false);
   }, []);
@@ -90,7 +91,7 @@ export function useLessonRecorder() {
       } catch {
         /* noop */
       }
-      streamRef.current?.getTracks?.().forEach((track) => track.stop());
+      stopStream(streamRef.current);
       releaseUrl();
     };
   }, []);

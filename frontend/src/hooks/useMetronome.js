@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createAudioContext } from "@/lib/audio";
 
 export function useMetronome({ bpm = 100, beats = 4, onBeat } = {}) {
   const [running, setRunning] = useState(false);
@@ -26,8 +27,7 @@ export function useMetronome({ bpm = 100, beats = 4, onBeat } = {}) {
 
   const start = useCallback(async () => {
     if (running) return;
-    const Ctx = window.AudioContext || window.webkitAudioContext;
-    const ctx = ctxRef.current || new Ctx();
+    const ctx = ctxRef.current || await createAudioContext();
     ctxRef.current = ctx;
     if (ctx.state === "suspended") await ctx.resume();
     beatRef.current = 0;

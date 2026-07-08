@@ -229,6 +229,45 @@ class OnboardRequest(BaseModel):
 def now_utc_iso() -> str:
     return datetime.now(timezone.utc).isoformat()
 
+def parse_iso_utc(value: Any) -> Optional[datetime]:
+    """Parse an ISO-8601 string (or pass through a datetime) into a timezone-aware
+    UTC datetime. Returns None when the value is missing or unparseable."""
+    if not value:
+        return None
+    if isinstance(value, datetime):
+        dt = value
+    else:
+        try:
+            dt = datetime.fromisoformat(value)
+        except (ValueError, TypeError):
+            return None
+    if dt.tzinfo is None:
+        dt = dt.replace(tzinfo=timezone.utc)
+    return dt
+
+def is_locked_for(item: Dict[str, Any], user: Optional[Dict[str, Any]]) -> bool:
+    """A premium item is locked unless the viewer is a premium user."""
+    return bool(item.get("is_premium") and not (user and user.get("is_premium")))
+
+# Premium grant windows (days) per billing period.
+PREMIUM_PERIOD_DAYS = {"monthly": 31, "annual": 366}
+
+async def grant_premium(user_id: str, period: Optional[str]) -> str:
+    """Idempotently mark a user premium for the given billing period. Returns the
+    new expiry as an ISO string."""
+    period = period or "monthly"
+    days = PREMIUM_PERIOD_DAYS.get(period, PREMIUM_PERIOD_DAYS["annual"])
+    new_exp = datetime.now(timezone.utc) + timedelta(days=days)
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "is_premium": True,
+            "premium_period": period,
+            "premium_expires_at": new_exp.isoformat(),
+        }},
+    )
+    return new_exp.isoformat()
+
 def hash_password(pw: str) -> str:
     return bcrypt.hashpw(pw.encode("utf-8"), bcrypt.gensalt()).decode("utf-8")
 
@@ -270,14 +309,11 @@ async def get_user_by_session_token(token: str) -> Optional[Dict[str, Any]]:
     sess = await db.user_sessions.find_one({"session_token": token}, {"_id": 0})
     if not sess:
         return None
-    exp = sess.get("expires_at")
-    if isinstance(exp, str):
-        try:
-            exp = datetime.fromisoformat(exp)
-        except Exception:
-            return None
-    if exp and exp.tzinfo is None:
-        exp = exp.replace(tzinfo=timezone.utc)
+    raw_exp = sess.get("expires_at")
+    exp = parse_iso_utc(raw_exp)
+    if raw_exp and exp is None:
+        # Unparseable expiry — treat the session as invalid.
+        return None
     if exp and exp < datetime.now(timezone.utc):
         return None
     return await get_user_by_id(sess["user_id"])
@@ -323,23 +359,13 @@ async def premium_required(user=Depends(current_user_required)) -> Dict[str, Any
     # Check premium and expiry
     if not user.get("is_premium"):
         raise HTTPException(status_code=402, detail="Premium subscription required")
-    exp = user.get("premium_expires_at")
-    if exp:
-        try:
-            exp_dt = datetime.fromisoformat(exp)
-            if exp_dt.tzinfo is None:
-                exp_dt = exp_dt.replace(tzinfo=timezone.utc)
-            if exp_dt < datetime.now(timezone.utc):
-                raise HTTPException(status_code=402, detail="Subscription expired")
-        except HTTPException:
-            raise
-        except Exception:
-            pass
+    exp_dt = parse_iso_utc(user.get("premium_expires_at"))
+    if exp_dt and exp_dt < datetime.now(timezone.utc):
+        raise HTTPException(status_code=402, detail="Subscription expired")
     return user
 
 def lesson_dict_to_response(lesson: Dict[str, Any], user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
-    locked = lesson.get("is_premium") and not (user and user.get("is_premium"))
-    return {**lesson, "locked": bool(locked)}
+    return {**lesson, "locked": is_locked_for(lesson, user)}
 
 # ---------- App ----------
 app = FastAPI(title="RiffNecromancer API")
@@ -527,8 +553,7 @@ async def list_presets(genre: Optional[str] = None, user=Depends(current_user_op
     for p in TONE_PRESETS:
         if genre and genre.lower() != "all" and p["genre"].lower() != genre.lower():
             continue
-        locked = p["is_premium"] and not (user and user.get("is_premium"))
-        out.append({**p, "locked": bool(locked)})
+        out.append({**p, "locked": is_locked_for(p, user)})
     return out
 
 # ---------- Routes: Sessions / History ----------
@@ -576,12 +601,9 @@ async def calendar_view(year: int, month: int, user=Depends(current_user_require
     total_seconds_all = 0
     total_sessions_all = 0
     for s in all_sessions:
-        try:
-            dt = datetime.fromisoformat(s["created_at"])
-        except Exception:
+        dt = parse_iso_utc(s.get("created_at"))
+        if dt is None:
             continue
-        if dt.tzinfo is None:
-            dt = dt.replace(tzinfo=timezone.utc)
         key_day = dt.strftime("%Y-%m-%d")
         daily_keys.add(key_day)
         total_seconds_all += int(s.get("duration_seconds") or 0)
@@ -663,11 +685,11 @@ async def progress_altar(user=Depends(current_user_required)):
     all_sess = await cur2.to_list(length=10000)
     counts: Dict[str, int] = {}
     for s in all_sess:
-        try:
-            dt = datetime.fromisoformat(s["created_at"]).date()
-        except Exception:
+        dt = parse_iso_utc(s.get("created_at"))
+        if dt is None:
             continue
-        counts[dt.isoformat()] = counts.get(dt.isoformat(), 0) + 1
+        day = dt.date().isoformat()
+        counts[day] = counts.get(day, 0) + 1
     for i in range(13, -1, -1):
         d = (today - timedelta(days=i)).isoformat()
         timeline.append({"date": d, "sessions": counts.get(d, 0)})
@@ -780,17 +802,7 @@ async def payment_status(session_id: str, http_request: Request, user=Depends(cu
     # Grant premium ONCE, idempotently
     granted = False
     if payment_status_str == "paid" and not tx.get("premium_granted"):
-        period = tx.get("period") or "monthly"
-        days = 31 if period == "monthly" else 366
-        new_exp = datetime.now(timezone.utc) + timedelta(days=days)
-        await db.users.update_one(
-            {"user_id": user["user_id"]},
-            {"$set": {
-                "is_premium": True,
-                "premium_period": period,
-                "premium_expires_at": new_exp.isoformat(),
-            }},
-        )
+        await grant_premium(user["user_id"], tx.get("period"))
         update["premium_granted"] = True
         granted = True
     await db.payment_transactions.update_one({"session_id": session_id}, {"$set": update})
@@ -825,17 +837,7 @@ async def stripe_webhook(request: Request):
     if sess_id:
         tx = await db.payment_transactions.find_one({"session_id": sess_id}, {"_id": 0})
         if tx and payment_status == "paid" and not tx.get("premium_granted"):
-            period = tx.get("period") or "monthly"
-            days = 31 if period == "monthly" else 366
-            new_exp = datetime.now(timezone.utc) + timedelta(days=days)
-            await db.users.update_one(
-                {"user_id": tx["user_id"]},
-                {"$set": {
-                    "is_premium": True,
-                    "premium_period": period,
-                    "premium_expires_at": new_exp.isoformat(),
-                }},
-            )
+            await grant_premium(tx["user_id"], tx.get("period"))
             await db.payment_transactions.update_one(
                 {"session_id": sess_id},
                 {"$set": {"payment_status": "paid", "premium_granted": True, "updated_at": now_utc_iso()}},

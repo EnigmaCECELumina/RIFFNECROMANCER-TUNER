@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { PitchDetector } from "pitchy";
+import { createAudioContext, getMicStream, stopStream, disconnectNodes, closeAudioContext } from "@/lib/audio";
+import { createPitchAnalyser, readPitch, centsBetween } from "@/lib/pitch";
 
 export const NOTE_HZ = {
   D3: 146.83, E3: 164.81, F3: 174.61, G3: 196.0, A3: 220.0, B3: 246.94,
@@ -8,11 +9,6 @@ export const NOTE_HZ = {
 };
 
 export const NOTE_ORDER = ["D3","E3","F3","G3","A3","B3","C4","D4","E4","F4","G4","A4","B4","C5","D5","E5"];
-
-function centsBetween(f1, f2) {
-  if (!f1 || !f2) return 999;
-  return 1200 * Math.log2(f1 / f2);
-}
 
 /**
  * Vocal pitch-target engine.
@@ -49,28 +45,18 @@ export function usePitchTarget({ target = "A3", mode = "held", sequence = ["D4",
       setHeldSeconds(0);
       setSeqIndex(0);
       setSeqDone(false);
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false } });
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new Ctx();
-      if (ctx.state === "suspended") await ctx.resume();
+      const stream = await getMicStream();
+      const ctx = await createAudioContext();
       const src = ctx.createMediaStreamSource(stream);
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 2048;
-      src.connect(analyser);
-      const detector = PitchDetector.forFloat32Array(analyser.fftSize);
-      detector.minVolumeDecibels = -55;
-      const buffer = new Float32Array(detector.inputLength);
-      const time = new Float32Array(analyser.fftSize);
+      const { analyser, detector, buffer, time } = createPitchAnalyser(ctx, src);
       audioRef.current = { stream, ctx, src, analyser, detector, buffer, time };
       setActive(true);
       lastTsRef.current = performance.now();
       const loop = () => {
         const ref = audioRef.current;
         if (!ref?.analyser) return;
-        ref.analyser.getFloatTimeDomainData(ref.time);
-        ref.buffer.set(ref.time.subarray(0, ref.detector.inputLength));
-        const [freq, clarity] = ref.detector.findPitch(ref.buffer, ref.ctx.sampleRate);
-        const validFreq = clarity > 0.85 && freq >= 60 && freq <= 1500 ? freq : 0;
+        const { frequency, clarity, valid } = readPitch(ref, ref.ctx.sampleRate);
+        const validFreq = valid ? frequency : 0;
         setDetected({ frequency: validFreq, clarity });
 
         const now = performance.now();
@@ -117,10 +103,9 @@ export function usePitchTarget({ target = "A3", mode = "held", sequence = ["D4",
     cancelAnimationFrame(rafRef.current);
     rafRef.current = 0;
     const ref = audioRef.current;
-    try { ref?.src?.disconnect(); } catch { /* noop */ }
-    try { ref?.analyser?.disconnect(); } catch { /* noop */ }
-    try { ref?.stream?.getTracks?.().forEach((t) => t.stop()); } catch { /* noop */ }
-    try { ref?.ctx?.close(); } catch { /* noop */ }
+    disconnectNodes(ref?.src, ref?.analyser);
+    stopStream(ref?.stream);
+    closeAudioContext(ref?.ctx);
     audioRef.current = {};
     setActive(false);
     setDetected({ frequency: 0, clarity: 0 });

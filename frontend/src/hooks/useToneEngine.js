@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { createAudioContext, getMicStream, stopStream, closeAudioContext } from "@/lib/audio";
 
 /**
  * Realistic Tone Lab DSP chain with pedalboard:
@@ -240,13 +241,9 @@ export function useToneEngine() {
   const start = useCallback(async () => {
     try {
       setError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: { echoCancellation: false, noiseSuppression: false, autoGainControl: false },
-      });
+      const stream = await getMicStream();
       streamRef.current = stream;
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new Ctx();
-      if (ctx.state === "suspended") await ctx.resume();
+      const ctx = await createAudioContext();
       const src = ctx.createMediaStreamSource(stream);
       const chain = buildChain(ctx, params);
       src.connect(chain.inGain);
@@ -268,8 +265,8 @@ export function useToneEngine() {
       const c = refs.current.chain;
       if (c) Object.values(c).forEach((n) => { try { n.disconnect(); } catch { /* noop */ } });
     } catch { /* noop */ }
-    try { streamRef.current?.getTracks?.().forEach((t) => t.stop()); } catch { /* noop */ }
-    try { refs.current.ctx?.close(); } catch { /* noop */ }
+    stopStream(streamRef.current);
+    closeAudioContext(refs.current.ctx);
     streamRef.current = null;
     refs.current = {};
     setActive(false);

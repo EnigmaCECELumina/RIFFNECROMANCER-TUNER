@@ -1,5 +1,8 @@
 import { useCallback, useEffect, useRef, useState } from "react";
-import { PitchDetector } from "pitchy";
+import { createAudioContext, getMicStream, stopStream, disconnectNodes, closeAudioContext } from "@/lib/audio";
+import { createPitchAnalyser, readPitch, frequencyToNote } from "@/lib/pitch";
+
+export { frequencyToNote };
 
 // Drop D tuning frequencies (low to high): D2, A2, D3, G3, B3, E4
 export const DROP_D_STRINGS = [
@@ -10,19 +13,6 @@ export const DROP_D_STRINGS = [
   { name: "B", label: "B (2)", octave: 3, freq: 246.94, index: 2 },
   { name: "E", label: "High E (1)", octave: 4, freq: 329.63, index: 1 },
 ];
-
-const NOTE_NAMES = ["C", "C#", "D", "D#", "E", "F", "F#", "G", "G#", "A", "A#", "B"];
-
-export function frequencyToNote(freq) {
-  if (!freq || freq <= 0) return null;
-  const n = 69 + 12 * Math.log2(freq / 440);
-  const midi = Math.round(n);
-  const noteIndex = ((midi % 12) + 12) % 12;
-  const octave = Math.floor(midi / 12) - 1;
-  const refFreq = 440 * Math.pow(2, (midi - 69) / 12);
-  const cents = Math.floor(1200 * Math.log2(freq / refFreq));
-  return { note: NOTE_NAMES[noteIndex], octave, cents, midi };
-}
 
 export function nearestDropDString(freq) {
   if (!freq) return null;
@@ -52,29 +42,17 @@ export function usePitchDetector() {
   const start = useCallback(async () => {
     try {
       setError(null);
-      const stream = await navigator.mediaDevices.getUserMedia({
-        audio: {
-          echoCancellation: false,
-          noiseSuppression: false,
-          autoGainControl: false,
-        },
-      });
+      const stream = await getMicStream();
       streamRef.current = stream;
-      const Ctx = window.AudioContext || window.webkitAudioContext;
-      const ctx = new Ctx();
-      if (ctx.state === "suspended") await ctx.resume();
+      const ctx = await createAudioContext();
       audioCtxRef.current = ctx;
       const src = ctx.createMediaStreamSource(stream);
       sourceRef.current = src;
-      const analyser = ctx.createAnalyser();
-      analyser.fftSize = 2048;
-      src.connect(analyser);
+      const { analyser, detector, buffer, time } = createPitchAnalyser(ctx, src);
       analyserRef.current = analyser;
-      const detector = PitchDetector.forFloat32Array(analyser.fftSize);
-      detector.minVolumeDecibels = -55;
       detectorRef.current = detector;
-      bufferRef.current = new Float32Array(detector.inputLength);
-      timeDataRef.current = new Float32Array(analyser.fftSize);
+      bufferRef.current = buffer;
+      timeDataRef.current = time;
       setActive(true);
       const loop = () => {
         const an = analyserRef.current;
@@ -82,11 +60,11 @@ export function usePitchDetector() {
         const buf = bufferRef.current;
         const td = timeDataRef.current;
         if (!an || !det || !buf || !td) return;
-        an.getFloatTimeDomainData(td);
-        // copy needed length
-        buf.set(td.subarray(0, det.inputLength));
-        const [frequency, clarity] = det.findPitch(buf, ctx.sampleRate);
-        if (clarity > 0.85 && frequency >= 60 && frequency <= 1500) {
+        const { frequency, clarity, valid } = readPitch(
+          { analyser: an, detector: det, buffer: buf, time: td },
+          ctx.sampleRate,
+        );
+        if (valid) {
           setPitch({ frequency, clarity });
         } else {
           setPitch((p) => ({ frequency: p.frequency * 0.7, clarity: clarity || 0 }));
@@ -104,10 +82,9 @@ export function usePitchDetector() {
   const stop = useCallback(() => {
     cancelAnimationFrame(rafRef.current);
     rafRef.current = 0;
-    try { sourceRef.current?.disconnect(); } catch {}
-    try { analyserRef.current?.disconnect(); } catch {}
-    try { streamRef.current?.getTracks?.().forEach((t) => t.stop()); } catch {}
-    try { audioCtxRef.current?.close(); } catch {}
+    disconnectNodes(sourceRef.current, analyserRef.current);
+    stopStream(streamRef.current);
+    closeAudioContext(audioCtxRef.current);
     streamRef.current = null;
     sourceRef.current = null;
     analyserRef.current = null;

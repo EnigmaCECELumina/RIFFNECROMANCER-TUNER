@@ -4,6 +4,7 @@ import PageContainer from "@/components/PageContainer";
 import LessonCard from "@/components/LessonCard";
 import PaywallDialog from "@/components/PaywallDialog";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 
 const SHAPE_PRESETS = [
   {
@@ -55,7 +56,10 @@ export default function Drills() {
       try {
         const { data } = await api.get("/lessons?category=guitar");
         setLessons(data);
-      } catch {}
+      } catch (e) {
+        console.error("Failed to load guitar lessons", e);
+        toast.error("Could not load drills");
+      }
     })();
   }, []);
 

@@ -32,7 +32,8 @@ export default function DrillPlayer() {
         }
         setLesson(data);
       } catch (e) {
-        setError("Lesson not found");
+        console.error("Failed to load lesson", e);
+        setError(e?.response?.status === 404 ? "Lesson not found" : "Could not load this ritual");
       }
     })();
   }, [id, navigate]);

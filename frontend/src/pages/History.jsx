@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, useState } from "react";
 import PageContainer from "@/components/PageContainer";
 import { api } from "@/lib/api";
+import { toast } from "sonner";
 import { ChevronLeft, ChevronRight, Calendar as CalIcon, Flame, Award } from "lucide-react";
 
 function monthName(m) {
@@ -18,7 +19,10 @@ export default function History() {
       try {
         const { data } = await api.get(`/history/calendar?year=${year}&month=${month}`);
         setData(data);
-      } catch {}
+      } catch (e) {
+        console.error("Failed to load calendar", e);
+        toast.error("Could not load your history");
+      }
     })();
   }, [year, month]);
 

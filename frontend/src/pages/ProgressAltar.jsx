@@ -1,20 +1,41 @@
-import React, { useEffect, useState } from "react";
+import React, { useCallback, useEffect, useState } from "react";
 import PageContainer from "@/components/PageContainer";
 import { api } from "@/lib/api";
 import { ResponsiveContainer, AreaChart, Area, XAxis, YAxis, Tooltip, CartesianGrid } from "recharts";
 import { Flame, CheckCircle2 } from "lucide-react";
+import { toast } from "sonner";
 
 export default function ProgressAltar() {
   const [data, setData] = useState(null);
+  const [error, setError] = useState(false);
 
-  useEffect(() => {
-    (async () => {
-      try {
-        const { data } = await api.get("/progress/altar");
-        setData(data);
-      } catch {}
-    })();
+  const load = useCallback(async () => {
+    setError(false);
+    try {
+      const { data } = await api.get("/progress/altar");
+      setData(data);
+    } catch (e) {
+      console.error("Failed to load progress altar", e);
+      setError(true);
+      toast.error("Could not load your progress");
+    }
   }, []);
+
+  useEffect(() => { load(); }, [load]);
+
+  if (error) {
+    return (
+      <PageContainer>
+        <div className="text-sm text-[hsl(var(--text-3))]">Could not load your progress.</div>
+        <button
+          onClick={load}
+          className="mt-3 inline-flex items-center rounded-md bg-[hsl(var(--brand))] px-3 py-2 text-[11px] uppercase tracking-[0.18em] text-[hsl(var(--brand-foreground))]"
+        >
+          Retry
+        </button>
+      </PageContainer>
+    );
+  }
 
   if (!data) return <PageContainer><div className="text-sm text-[hsl(var(--text-3))]">Loading…</div></PageContainer>;
 

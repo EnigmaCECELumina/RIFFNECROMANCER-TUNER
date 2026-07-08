@@ -235,7 +235,10 @@ def hash_password(pw: str) -> str:
 def verify_password(pw: str, hashed: str) -> bool:
     try:
         return bcrypt.checkpw(pw.encode("utf-8"), hashed.encode("utf-8"))
-    except Exception:
+    except (ValueError, TypeError):
+        # Malformed/corrupt stored hash. Treat as auth failure but surface it —
+        # a persistently unverifiable hash is a data-integrity problem.
+        logger.warning("Password verification failed due to malformed stored hash")
         return False
 
 def create_jwt(user_id: str) -> str:
@@ -274,7 +277,8 @@ async def get_user_by_session_token(token: str) -> Optional[Dict[str, Any]]:
     if isinstance(exp, str):
         try:
             exp = datetime.fromisoformat(exp)
-        except Exception:
+        except ValueError:
+            logger.warning("Session %s has unparseable expires_at %r; rejecting", token[:8], exp)
             return None
     if exp and exp.tzinfo is None:
         exp = exp.replace(tzinfo=timezone.utc)
@@ -304,14 +308,15 @@ async def current_user_optional(
         u = await get_user_by_session_token(bearer)
         if u:
             return u
-        # Try JWT
+        # Try JWT. Invalid/expired tokens are an expected auth outcome (return
+        # no user); only swallow JWT errors, not unexpected bugs.
         try:
             payload = jwt.decode(bearer, JWT_SECRET, algorithms=[JWT_ALGORITHM])
             uid = payload.get("sub")
             if uid:
                 return await get_user_by_id(uid)
-        except Exception:
-            pass
+        except jwt.PyJWTError as e:
+            logger.debug("Bearer JWT rejected: %s", e)
     return None
 
 async def current_user_required(user=Depends(current_user_optional)) -> Dict[str, Any]:
@@ -333,8 +338,13 @@ async def premium_required(user=Depends(current_user_required)) -> Dict[str, Any
                 raise HTTPException(status_code=402, detail="Subscription expired")
         except HTTPException:
             raise
-        except Exception:
-            pass
+        except ValueError:
+            # Corrupt expiry can't be evaluated. Don't silently treat premium as
+            # valid forever — log it so the bad record can be investigated.
+            logger.warning(
+                "User %s has unparseable premium_expires_at %r; cannot verify expiry",
+                user.get("user_id"), exp,
+            )
     return user
 
 def lesson_dict_to_response(lesson: Dict[str, Any], user: Optional[Dict[str, Any]]) -> Dict[str, Any]:
@@ -578,7 +588,11 @@ async def calendar_view(year: int, month: int, user=Depends(current_user_require
     for s in all_sessions:
         try:
             dt = datetime.fromisoformat(s["created_at"])
-        except Exception:
+        except (ValueError, KeyError):
+            logger.warning(
+                "Skipping session %s with invalid created_at %r",
+                s.get("session_id"), s.get("created_at"),
+            )
             continue
         if dt.tzinfo is None:
             dt = dt.replace(tzinfo=timezone.utc)
@@ -665,7 +679,11 @@ async def progress_altar(user=Depends(current_user_required)):
     for s in all_sess:
         try:
             dt = datetime.fromisoformat(s["created_at"]).date()
-        except Exception:
+        except (ValueError, KeyError):
+            logger.warning(
+                "Skipping session %s with invalid created_at %r",
+                s.get("session_id"), s.get("created_at"),
+            )
             continue
         counts[dt.isoformat()] = counts.get(dt.isoformat(), 0) + 1
     for i in range(13, -1, -1):

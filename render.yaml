@@ -7,6 +7,27 @@ services:
     rootDir: backend
     buildCommand: pip install -r requirements.txt
     startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    # server.py reads these at import time and refuses to start if the required
+    # ones are missing. sync: false makes Render prompt for the value per env
+    # (values are never committed here).
+    envVars:
+      # Required — backend crashes on startup without these.
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      # Recommended — features 500/degrade without these, but startup is fine.
+      - key: STRIPE_LOOKUP_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Comma-separated allow-list incl. the frontend origin. Must NOT be "*".
+      - key: CORS_ORIGINS
+        sync: false
 
   # 2. React Frontend
   - type: web

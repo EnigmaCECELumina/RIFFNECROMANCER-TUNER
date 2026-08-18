@@ -9,6 +9,8 @@ import ProtectedRoute from "@/components/ProtectedRoute";
 import Landing from "@/pages/Landing";
 import AuthPage from "@/pages/AuthPage";
 import AuthCallback from "@/pages/AuthCallback";
+import ForgotPassword from "@/pages/ForgotPassword";
+import ResetPassword from "@/pages/ResetPassword";
 import Onboarding from "@/pages/Onboarding";
 import Dashboard from "@/pages/Dashboard";
 import Tuner from "@/pages/Tuner";
@@ -36,14 +38,16 @@ function AuthedLayout() {
 
 function AppRouter() {
   const location = useLocation();
-  // Synchronously detect Emergent OAuth session_id in URL fragment
-  if (location.hash?.includes("session_id=")) {
+  // Detect OAuth callback (both legacy Emergent session_id in hash and direct Google code in query params)
+  if (location.hash?.includes("session_id=") || location.search?.includes("code=")) {
     return <AuthCallback />;
   }
   return (
     <Routes>
       <Route path="/" element={<Landing />} />
       <Route path="/auth" element={<AuthPage />} />
+      <Route path="/forgot-password" element={<ForgotPassword />} />
+      <Route path="/reset-password" element={<ResetPassword />} />
       <Route path="/about" element={<StaticPages page="about" />} />
       <Route path="/contact" element={<StaticPages page="contact" />} />
       <Route path="/privacy" element={<StaticPages page="privacy" />} />

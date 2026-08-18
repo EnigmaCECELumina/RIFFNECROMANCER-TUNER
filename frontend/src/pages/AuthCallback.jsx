@@ -1,12 +1,13 @@
 import React, { useEffect, useRef } from "react";
-import { useNavigate } from "react-router-dom";
-import { api } from "@/lib/api";
+import { useNavigate, useSearchParams } from "react-router-dom";
+import { api, setAuthToken } from "@/lib/api";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
 
 export default function AuthCallback() {
   const navigate = useNavigate();
   const { setUser, refresh } = useAuth();
+  const [params] = useSearchParams();
   const hasProcessed = useRef(false);
 
   useEffect(() => {
@@ -14,21 +15,49 @@ export default function AuthCallback() {
     hasProcessed.current = true;
     (async () => {
       try {
+        // Check for Emergent Agent session_id (legacy)
         const hash = window.location.hash || "";
-        const m = hash.match(/session_id=([^&]+)/);
-        if (!m) {
+        const sessionMatch = hash.match(/session_id=([^&]+)/);
+        
+        if (sessionMatch) {
+          // Legacy Emergent Agent OAuth flow
+          const session_id = decodeURIComponent(sessionMatch[1]);
+          const { data } = await api.post("/auth/oauth/session", { session_id });
+          if (data?.access_token) {
+            setAuthToken(data.access_token);
+          }
+          if (data?.user) {
+            setUser(data.user);
+          } else {
+            await refresh();
+          }
+          toast.success("Signed in with Google");
+          window.history.replaceState({}, document.title, "/dashboard");
+          navigate("/dashboard", { replace: true });
+          return;
+        }
+        
+        // Direct Google OAuth flow
+        const code = params.get("code");
+        const state = params.get("state");
+        
+        if (!code) {
+          toast.error("OAuth callback missing authorization code");
           navigate("/auth", { replace: true });
           return;
         }
-        const session_id = decodeURIComponent(m[1]);
-        const { data } = await api.post("/auth/oauth/session", { session_id });
+        
+        const { data } = await api.post("/auth/google/callback", { code, state });
+        if (data?.access_token) {
+          setAuthToken(data.access_token);
+        }
         if (data?.user) {
           setUser(data.user);
         } else {
           await refresh();
         }
         toast.success("Signed in with Google");
-        // Clean hash and route
+        // Clean URL
         window.history.replaceState({}, document.title, "/dashboard");
         navigate("/dashboard", { replace: true });
       } catch (e) {
@@ -37,7 +66,7 @@ export default function AuthCallback() {
         navigate("/auth", { replace: true });
       }
     })();
-  }, [navigate, refresh, setUser]);
+  }, [navigate, refresh, setUser, params]);
 
   return (
     <div className="min-h-screen flex items-center justify-center" data-testid="oauth-callback-loading">

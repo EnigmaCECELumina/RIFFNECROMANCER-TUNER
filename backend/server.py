@@ -20,6 +20,7 @@ import jwt
 import httpx
 from dotenv import load_dotenv
 from fastapi import FastAPI, APIRouter, HTTPException, Depends, Request, Response, status, Cookie, Header
+from fastapi.responses import RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 from motor.motor_asyncio import AsyncIOMotorClient
 from pydantic import BaseModel, EmailStr, Field
@@ -194,6 +195,13 @@ class RegisterRequest(BaseModel):
 class LoginRequest(BaseModel):
     email: EmailStr
     password: str
+
+class ForgotPasswordRequest(BaseModel):
+    email: EmailStr
+
+class ResetPasswordRequest(BaseModel):
+    token: str
+    new_password: str = Field(min_length=6, max_length=128)
 
 class User(BaseModel):
     user_id: str
@@ -384,6 +392,12 @@ CORS_ORIGINS = [o.strip() for o in _cors_origins_env.split(",") if o.strip()] or
 if "*" in CORS_ORIGINS:
     raise RuntimeError("CORS_ORIGINS must not contain '*' when allow_credentials=True")
 
+# Google OAuth Configuration
+FRONTEND_URL = os.environ.get("FRONTEND_URL", "http://localhost:3000")
+GOOGLE_CLIENT_ID = os.environ.get("GOOGLE_CLIENT_ID")
+GOOGLE_CLIENT_SECRET = os.environ.get("GOOGLE_CLIENT_SECRET")
+GOOGLE_REDIRECT_URI = os.environ.get("GOOGLE_REDIRECT_URI", f"{FRONTEND_URL}/auth/callback")
+
 app.add_middleware(
     CORSMiddleware,
     allow_credentials=True,
@@ -429,6 +443,51 @@ async def logout(response: Response, session_token: Optional[str] = Cookie(defau
         await db.user_sessions.delete_one({"session_token": session_token})
     response.delete_cookie("session_token", path="/")
     return {"ok": True}
+
+@api.post("/auth/forgot-password")
+async def forgot_password(req: ForgotPasswordRequest):
+    email = req.email.lower()
+    user = await get_user_by_email(email)
+    if not user:
+        # Don't reveal if email exists for security
+        return {"ok": True, "message": "If the email exists, a reset link will be sent"}
+    
+    # Generate reset token (valid for 1 hour)
+    reset_token = f"reset_{uuid.uuid4().hex[:24]}"
+    expires_at = datetime.now(timezone.utc) + timedelta(hours=1)
+    
+    # Store reset token in database
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"reset_token": reset_token, "reset_token_expires": expires_at.isoformat()}}
+    )
+    
+    # Email service integration required for production
+    # Currently logs reset link for development
+    reset_link = f"{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/reset-password?token={reset_token}"
+    logger.info(f"Password reset link for {email}: {reset_link}")
+    
+    return {"ok": True, "message": "If the email exists, a reset link will be sent"}
+
+@api.post("/auth/reset-password")
+async def reset_password(req: ResetPasswordRequest):
+    # Find user with valid reset token
+    user = await db.users.find_one({
+        "reset_token": req.token,
+        "reset_token_expires": {"$gt": now_utc_iso()}
+    }, {"_id": 0})
+    
+    if not user:
+        raise HTTPException(status_code=400, detail="Invalid or expired reset token")
+    
+    # Update password
+    new_hash = hash_password(req.new_password)
+    await db.users.update_one(
+        {"user_id": user["user_id"]},
+        {"$set": {"password_hash": new_hash}, "$unset": {"reset_token": "", "reset_token_expires": ""}}
+    )
+    
+    return {"ok": True, "message": "Password reset successfully"}
 
 @api.get("/auth/me", response_model=User)
 async def me(user=Depends(current_user_required)):
@@ -489,7 +548,100 @@ async def oauth_session(req: OAuthSessionRequest, response: Response):
         httponly=True, secure=True, samesite="none", path="/",
         max_age=7 * 24 * 60 * 60,
     )
-    return {"ok": True, "user": serialize_user(user_doc).model_dump()}
+    # Also return JWT token for frontend compatibility
+    jwt_token = create_jwt(uid)
+    return {"ok": True, "access_token": jwt_token, "user": serialize_user(user_doc).model_dump()}
+
+# ---------- Direct Google OAuth Flow ----------
+@api.get("/auth/google")
+async def google_oauth_redirect():
+    """Redirect user to Google OAuth consent screen"""
+    if not GOOGLE_CLIENT_ID:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+    
+    state = uuid.uuid4().hex[:16]
+    google_auth_url = (
+        f"https://accounts.google.com/o/oauth2/v2/auth?"
+        f"client_id={GOOGLE_CLIENT_ID}&"
+        f"redirect_uri={GOOGLE_REDIRECT_URI}&"
+        f"response_type=code&"
+        f"scope=openid%20email%20profile&"
+        f"state={state}"
+    )
+    return RedirectResponse(url=google_auth_url)
+
+class GoogleCallbackRequest(BaseModel):
+    code: str
+    state: str
+
+@api.post("/auth/google/callback")
+async def google_oauth_callback(req: GoogleCallbackRequest, response: Response):
+    """Handle Google OAuth callback and exchange code for tokens"""
+    if not GOOGLE_CLIENT_ID or not GOOGLE_CLIENT_SECRET:
+        raise HTTPException(status_code=500, detail="Google OAuth not configured")
+    
+    # Exchange authorization code for access token
+    token_url = "https://oauth2.googleapis.com/token"
+    data = {
+        "code": req.code,
+        "client_id": GOOGLE_CLIENT_ID,
+        "client_secret": GOOGLE_CLIENT_SECRET,
+        "redirect_uri": GOOGLE_REDIRECT_URI,
+        "grant_type": "authorization_code",
+    }
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as hc:
+            r = await hc.post(token_url, data=data)
+        r.raise_for_status()
+        token_data = r.json()
+    except Exception as e:
+        logger.error(f"Google OAuth token exchange failed: {e}")
+        raise HTTPException(status_code=400, detail="Failed to exchange authorization code")
+    
+    # Get user info from Google
+    access_token = token_data.get("access_token")
+    userinfo_url = "https://www.googleapis.com/oauth2/v2/userinfo"
+    headers = {"Authorization": f"Bearer {access_token}"}
+    
+    try:
+        async with httpx.AsyncClient(timeout=10) as hc:
+            r = await hc.get(userinfo_url, headers=headers)
+        r.raise_for_status()
+        user_info = r.json()
+    except Exception as e:
+        logger.error(f"Google OAuth user info fetch failed: {e}")
+        raise HTTPException(status_code=400, detail="Failed to fetch user information")
+    
+    email = (user_info.get("email") or "").lower()
+    name = user_info.get("name")
+    picture = user_info.get("picture")
+    
+    if not email:
+        raise HTTPException(status_code=400, detail="Google did not return email address")
+    
+    # Create or update user
+    existing = await get_user_by_email(email)
+    if existing:
+        uid = existing["user_id"]
+        await db.users.update_one(
+            {"user_id": uid},
+            {"$set": {"name": name or existing.get("name"), "picture": picture or existing.get("picture"), "auth_provider": "google"}},
+        )
+        user_doc = await get_user_by_id(uid)
+    else:
+        uid = f"user_{uuid.uuid4().hex[:12]}"
+        user_doc = {
+            "user_id": uid, "email": email, "name": name, "picture": picture,
+            "is_premium": False, "onboarded": False, "accessibility": {},
+            "created_at": now_utc_iso(), "auth_provider": "google",
+        }
+        await db.users.insert_one(user_doc)
+    
+    # Create JWT token
+    jwt_token = create_jwt(uid)
+    
+    return {"ok": True, "access_token": jwt_token, "user": serialize_user(user_doc).model_dump()}
 
 # ---------- Routes: Onboarding ----------
 @api.post("/profile/onboard", response_model=User)

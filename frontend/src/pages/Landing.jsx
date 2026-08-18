@@ -270,7 +270,7 @@ export default function Landing() {
               <span className="font-semibold text-[hsl(var(--brand))]">Accessibility:</span> RIFFNECROMANCER is committed to WCAG 2.1 Level AA compliance. Our interface features screen-reader friendly navigation, high-contrast visual modes for low-vision users, visual pitch indicators for deaf musicians, and customizable audio/visual feedback for hard-of-hearing players.
             </p>
           </div>
-          
+
           {/* Copyright & Trademark */}
           <div className="border-t border-[hsl(var(--border))] pt-8 text-center">
             <div className="text-[10px] text-[hsl(var(--text-3))] uppercase tracking-[0.2em] space-y-2">

@@ -47,9 +47,8 @@ export default function AuthPage() {
   };
 
   const startGoogle = () => {
-    // REMINDER: DO NOT HARDCODE THE URL, OR ADD ANY FALLBACKS OR REDIRECT URLS, THIS BREAKS THE AUTH
-    const redirect = window.location.origin + "/dashboard";
-    window.location.href = `https://auth.emergentagent.com/?redirect=${encodeURIComponent(redirect)}`;
+    // Use direct Google OAuth via backend
+    window.location.href = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/auth/google`;
   };
 
   return (
@@ -81,6 +80,9 @@ export default function AuthPage() {
                 <div>
                   <Label htmlFor="login-password" className="text-[10px] uppercase tracking-[0.2em] text-[hsl(var(--text-3))]">Password</Label>
                   <Input id="login-password" type="password" required value={password} onChange={(e)=>setPassword(e.target.value)} className="bg-[hsl(var(--surface-2))] ring-1 ring-[hsl(var(--border))]" data-testid="login-password-input" />
+                </div>
+                <div className="text-right">
+                  <Link to="/forgot-password" className="text-[10px] text-[hsl(var(--brand))] hover:underline uppercase tracking-[0.18em]">Forgot Password?</Link>
                 </div>
                 <Button type="submit" disabled={busy} data-testid="login-submit-button" className="w-full bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand))]/90 text-[hsl(var(--brand-foreground))] uppercase tracking-[0.18em]">
                   {busy ? "Summoning…" : "Sign In"}

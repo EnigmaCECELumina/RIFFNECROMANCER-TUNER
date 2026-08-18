@@ -1,0 +1,57 @@
+services:
+  # 1. Python/FastAPI Backend
+  - type: web
+    name: rune-ritual-backend
+    env: python
+    plan: free
+    runtime: "3.11"
+    rootDir: backend
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn server:app --host 0.0.0.0 --port $PORT
+    envVars:
+      # Required — backend crashes on startup without these.
+      - key: MONGO_URL
+        sync: false
+      - key: DB_NAME
+        sync: false
+      - key: JWT_SECRET
+        sync: false
+      - key: STRIPE_SECRET_KEY
+        sync: false
+      # Recommended — features 500/degrade without these, but startup is fine.
+      - key: STRIPE_LOOKUP_KEY
+        sync: false
+      - key: STRIPE_WEBHOOK_SECRET
+        sync: false
+      # Comma-separated allow-list incl. the frontend origin. Must NOT be "*".
+      - key: CORS_ORIGINS
+        sync: false
+
+  # 2. React Frontend
+  - type: static_site
+    name: rune-ritual-frontend
+    plan: free
+    rootDir: frontend
+    buildCommand: npm install --legacy-peer-deps && npm run build
+    publishDir: build
+    envVars:
+      # Backend URL for frontend API calls.
+      - key: REACT_APP_BACKEND_URL
+        value: https://rune-ritual-backend-qdgy.onrender.com
+      # Stripe public key for frontend payments.
+      - key: STRIPE_PUBLIC_KEY
+        sync: false
+    routes:
+      - type: rewrite
+        source: /*
+        destination: /index.html
+
+  # 3. RiffNecromancer Backend
+  - type: web
+    name: riffnecromancer-backend
+    env: python
+    buildCommand: pip install -r requirements.txt
+    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    envVars:
+      - key: STRIPE_SECRET_KEY
+        sync: false

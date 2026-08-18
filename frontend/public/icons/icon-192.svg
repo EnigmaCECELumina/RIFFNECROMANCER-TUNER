@@ -1,0 +1,25 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 192 192" width="192" height="192">
+  <defs>
+    <radialGradient id="bg" cx="50%" cy="40%" r="70%">
+      <stop offset="0%" stop-color="#1a1015"/>
+      <stop offset="55%" stop-color="#111114"/>
+      <stop offset="100%" stop-color="#0A0A0B"/>
+    </radialGradient>
+    <linearGradient id="gl" x1="0" y1="0" x2="1" y2="1">
+      <stop offset="0%" stop-color="#dc2626"/>
+      <stop offset="100%" stop-color="#8f1a1a"/>
+    </linearGradient>
+    <filter id="soft" x="-50%" y="-50%" width="200%" height="200%">
+      <feGaussianBlur stdDeviation="2" />
+    </filter>
+  </defs>
+  <rect x="0" y="0" width="192" height="192" rx="38" fill="url(#bg)"/>
+  <circle cx="96" cy="96" r="58" fill="none" stroke="url(#gl)" stroke-width="2" opacity="0.55"/>
+  <circle cx="96" cy="96" r="42" fill="none" stroke="#dc2626" stroke-width="1.2" opacity="0.35"/>
+  <!-- Stylized R -->
+  <g fill="#f5f5f5" font-family="Georgia, 'Times New Roman', serif" font-weight="700">
+    <text x="96" y="122" font-size="96" text-anchor="middle" letter-spacing="-2">R</text>
+  </g>
+  <!-- Crimson accent bar -->
+  <rect x="66" y="140" width="60" height="3" rx="1.5" fill="url(#gl)" opacity="0.85"/>
+</svg>

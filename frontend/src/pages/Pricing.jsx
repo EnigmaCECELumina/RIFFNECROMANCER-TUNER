@@ -2,7 +2,6 @@ import React, { useState } from "react";
 import PageContainer from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Check, Crown } from "lucide-react";
-import { startCheckout } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
@@ -15,8 +14,9 @@ const FEATURES = [
   "Cancel any time",
 ];
 
-const STRIPE_PRICES = {
-  monthly: "price_1TrEBTPazp0TRDgXZsELZMwa",  // $7 monthly subscription
+// Make sure these match the exact Price IDs from your Stripe Dashboard
+const PRICING_PACKAGES = {
+  monthly: "price_1TrEBTPazp0TRDgXZsELZMwa", // $7 monthly subscription
   yearly: "price_1TrEBTPazp0TRDgXjH0k3eYy"    // $59 yearly subscription
 };
 
@@ -28,9 +28,17 @@ export default function Pricing() {
   const handleCheckout = async () => {
     try {
       setBusy(billingInterval);
-      const selectedPriceId = STRIPE_PRICES[billingInterval];
-      const url = await startCheckout(selectedPriceId);
-      if (url) window.location.href = url;
+      const selectedPriceId = PRICING_PACKAGES[billingInterval];
+      
+      // Call your API route
+      const response = await fetch(`${process.env.REACT_APP_API_URL}/checkout`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ priceId: selectedPriceId }) 
+      });
+      
+      const data = await response.json();
+      if (data.url) window.location.href = data.url;
       else toast.error("Could not start checkout");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Checkout failed");

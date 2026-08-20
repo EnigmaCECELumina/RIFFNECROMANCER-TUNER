@@ -228,8 +228,7 @@ class SessionLogRequest(BaseModel):
     notes: Optional[str] = None
 
 class CheckoutRequest(BaseModel):
-    package_id: str
-    origin_url: str
+    priceId: str  # Must match the JSON key sent from React
 
 class OnboardRequest(BaseModel):
     skill_level: Optional[str] = None
@@ -809,26 +808,22 @@ async def progress_altar(user=Depends(current_user_required)):
     }
 
 # ---------- Routes: Stripe ----------
-@api.post("/billing/checkout")
-async def create_checkout_session(req: CheckoutRequest, user=Depends(current_user_required)):
-    pkg = SUBSCRIPTION_PACKAGES.get(req.package_id)
-    if not pkg: raise HTTPException(status_code=400, detail="Invalid package_id specified")
+@api.post("/checkout")
+async def create_checkout_session(data: CheckoutRequest):
     try:
-        price_id = get_stripe_lookup_key(req.package_id)
-    except Exception:
-        raise HTTPException(status_code=500, detail="Billing initialization failed")
-
-    try:
-        checkout_session = stripe.checkout.Session.create(
-            customer_email=user["email"], payment_method_types=["card"],
-            line_items=[{"price": price_id, "quantity": 1}], mode="subscription",
-            success_url=f"{req.origin_url}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
-            cancel_url=f"{req.origin_url}/billing?canceled=true",
-            metadata={"user_id": user["user_id"], "package_id": req.package_id},
+        session = stripe.checkout.Session.create(
+            payment_method_types=['card'],
+            line_items=[{
+                'price': data.priceId, # Must receive the valid price_... string
+                'quantity': 1,
+            }],
+            mode='subscription',
+            success_url=f"{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
+            cancel_url=f"{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/billing?canceled=true",
         )
-        return {"checkout_url": checkout_session.url, "url": checkout_session.url, "session_id": checkout_session.id}
-    except Exception:
-        raise HTTPException(status_code=500, detail="Could not create checkout session via provider")
+        return {"url": session.url}
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=str(e))
 
 @api.get("/billing/status/{session_id}")
 async def get_payment_status(session_id: str, user=Depends(current_user_required)):

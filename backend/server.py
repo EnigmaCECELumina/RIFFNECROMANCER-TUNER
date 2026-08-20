@@ -382,6 +382,12 @@ def lesson_dict_to_response(lesson: Dict[str, Any], user: Optional[Dict[str, Any
 
 # ---------- App Routing ----------
 app = FastAPI(title="RiffNecromancer API")
+
+@app.get("/")
+@app.head("/")
+async def root():
+    return {"status": "ok", "message": "Rune Ritual API running"}
+
 api = APIRouter(prefix="/api")
 
 _cors_origins_env = os.environ.get("CORS_ORIGINS", "")
@@ -405,11 +411,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
-
-@api.get("/")
-@api.head("/")
-async def root():
-    return {"status": "ok", "service": "Rune Ritual Backend"}
 
 # ---------- Routes: Auth ----------
 @api.post("/auth/register", response_model=AuthResponse)

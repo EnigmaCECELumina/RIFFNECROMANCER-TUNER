@@ -15,14 +15,21 @@ const FEATURES = [
   "Cancel any time",
 ];
 
+const STRIPE_PRICES = {
+  monthly: "price_MONTHLY_PRICE_ID_HERE", // Add your monthly price ID
+  yearly: "price_1TrEBTPazp0TRDgXjH0k3eYy"  // Live yearly price ID
+};
+
 export default function Pricing() {
   const { user } = useAuth();
   const [busy, setBusy] = useState(null);
+  const [billingInterval, setBillingInterval] = useState('monthly'); // 'monthly' or 'yearly'
 
-  const handleCheckout = async (pkg) => {
+  const handleCheckout = async () => {
     try {
-      setBusy(pkg);
-      const url = await startCheckout(pkg);
+      setBusy(billingInterval);
+      const selectedPriceId = STRIPE_PRICES[billingInterval];
+      const url = await startCheckout(selectedPriceId);
       if (url) window.location.href = url;
       else toast.error("Could not start checkout");
     } catch (e) {
@@ -46,6 +53,23 @@ export default function Pricing() {
         </div>
       )}
 
+      {/* Billing Interval Toggle */}
+      <div className="mt-6 flex items-center justify-center gap-4">
+        <button
+          onClick={() => setBillingInterval('monthly')}
+          className={`text-sm uppercase tracking-[0.18em] transition-colors ${billingInterval === 'monthly' ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--text-3))]'}`}
+        >
+          Monthly
+        </button>
+        <div className="w-12 h-px bg-[hsl(var(--border))]"></div>
+        <button
+          onClick={() => setBillingInterval('yearly')}
+          className={`text-sm uppercase tracking-[0.18em] transition-colors ${billingInterval === 'yearly' ? 'text-[hsl(var(--foreground))]' : 'text-[hsl(var(--text-3))]'}`}
+        >
+          Yearly
+        </button>
+      </div>
+
       <div className="mt-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div className="rounded-[var(--radius)] bg-[hsl(var(--card))]/85 ring-1 ring-[hsl(var(--border))] p-6 [box-shadow:var(--shadow-inner-marble),var(--shadow-elev-1)]" data-testid="pricing-monthly-card">
           <div className="text-[10px] uppercase tracking-[0.22em] text-[hsl(var(--text-3))]">Monthly</div>
@@ -58,8 +82,8 @@ export default function Pricing() {
               <li key={f} className="flex items-start gap-2"><Check size={14} className="mt-0.5 text-[hsl(var(--brand))]" /> {f}</li>
             ))}
           </ul>
-          <Button onClick={() => handleCheckout("monthly")} disabled={!!busy} data-testid="pricing-subscribe-monthly" className="mt-6 w-full bg-[hsl(var(--secondary))]/80 ring-1 ring-[hsl(var(--border))] uppercase tracking-[0.18em]">
-            {busy === "monthly" ? "Opening checkout…" : "Subscribe Monthly"}
+          <Button onClick={handleCheckout} disabled={!!busy} data-testid="pricing-subscribe-monthly" className="mt-6 w-full bg-[hsl(var(--secondary))]/80 ring-1 ring-[hsl(var(--border))] uppercase tracking-[0.18em]">
+            {busy === billingInterval ? "Opening checkout…" : "Subscribe Monthly"}
           </Button>
         </div>
 
@@ -78,8 +102,8 @@ export default function Pricing() {
               <li key={f} className="flex items-start gap-2"><Check size={14} className="mt-0.5 text-[hsl(var(--brand))]" /> {f}</li>
             ))}
           </ul>
-          <Button onClick={() => handleCheckout("annual")} disabled={!!busy} data-testid="pricing-subscribe-annual" className="mt-6 w-full bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand))]/90 text-[hsl(var(--brand-foreground))] uppercase tracking-[0.18em]">
-            {busy === "annual" ? "Opening checkout…" : "Subscribe Annually"}
+          <Button onClick={handleCheckout} disabled={!!busy} data-testid="pricing-subscribe-annual" className="mt-6 w-full bg-[hsl(var(--brand))] hover:bg-[hsl(var(--brand))]/90 text-[hsl(var(--brand-foreground))] uppercase tracking-[0.18em]">
+            {busy === billingInterval ? "Opening checkout…" : "Subscribe Annually"}
           </Button>
         </div>
       </div>

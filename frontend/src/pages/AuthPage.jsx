@@ -48,7 +48,7 @@ export default function AuthPage() {
 
   const startGoogle = () => {
     // Use direct Google OAuth via backend with /api prefix
-    window.location.href = `${process.env.REACT_APP_BACKEND_URL || 'http://localhost:8000'}/api/auth/google`;
+    window.location.href = `${process.env.REACT_APP_API_URL || 'http://localhost:8000'}/api/auth/google`;
   };
 
   return (

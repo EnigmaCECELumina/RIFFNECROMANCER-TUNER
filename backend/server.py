@@ -228,7 +228,8 @@ class SessionLogRequest(BaseModel):
     notes: Optional[str] = None
 
 class CheckoutRequest(BaseModel):
-    priceId: str  # Must match the JSON key sent from React
+    priceId: str | None = None
+    mode: str | None = None
 
 class OnboardRequest(BaseModel):
     skill_level: Optional[str] = None
@@ -808,16 +809,21 @@ async def progress_altar(user=Depends(current_user_required)):
     }
 
 # ---------- Routes: Stripe ----------
-@api.post("/checkout")
-async def create_checkout_session(data: CheckoutRequest):
+@api.post("/billing/checkout")
+async def checkout(req: CheckoutRequest):
+    if not req.priceId:
+        raise HTTPException(status_code=400, detail="priceId is required")
+    if not req.mode:
+        raise HTTPException(status_code=400, detail="mode is required")
+    
     try:
         session = stripe.checkout.Session.create(
             payment_method_types=['card'],
             line_items=[{
-                'price': data.priceId, # Must receive the valid price_... string
+                'price': req.priceId, # Must receive the valid price_... string
                 'quantity': 1,
             }],
-            mode='subscription',
+            mode=req.mode,
             success_url=f"{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/payment/success?session_id={{CHECKOUT_SESSION_ID}}",
             cancel_url=f"{os.environ.get('FRONTEND_URL', 'http://localhost:3000')}/billing?canceled=true",
         )

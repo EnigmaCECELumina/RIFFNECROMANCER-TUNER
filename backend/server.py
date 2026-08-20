@@ -407,8 +407,9 @@ app.add_middleware(
 )
 
 @api.get("/")
+@api.head("/")
 async def root():
-    return {"app": "RiffNecromancer", "status": "ok", "time": now_utc_iso()}
+    return {"status": "ok", "service": "Rune Ritual Backend"}
 
 # ---------- Routes: Auth ----------
 @api.post("/auth/register", response_model=AuthResponse)

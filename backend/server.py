@@ -808,7 +808,7 @@ async def progress_altar(user=Depends(current_user_required)):
     }
 
 # ---------- Routes: Stripe ----------
-@api.post("/api/checkout")
+@api.post("/checkout")
 async def create_checkout_session(data: CheckoutRequest):
     try:
         session = stripe.checkout.Session.create(

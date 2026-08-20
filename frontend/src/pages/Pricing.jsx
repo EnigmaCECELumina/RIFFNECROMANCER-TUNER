@@ -2,6 +2,7 @@ import React, { useState } from "react";
 import PageContainer from "@/components/PageContainer";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Check, Crown } from "lucide-react";
+import { startCheckout } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { toast } from "sonner";
 
@@ -29,16 +30,8 @@ export default function Pricing() {
     try {
       setBusy(billingInterval);
       const selectedPriceId = PRICING_PACKAGES[billingInterval];
-      
-      // Call your API route
-      const response = await fetch(`${process.env.REACT_APP_API_URL}/checkout`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ priceId: selectedPriceId }) 
-      });
-      
-      const data = await response.json();
-      if (data.url) window.location.href = data.url;
+      const url = await startCheckout(selectedPriceId);
+      if (url) window.location.href = url;
       else toast.error("Could not start checkout");
     } catch (e) {
       toast.error(e?.response?.data?.detail || "Checkout failed");

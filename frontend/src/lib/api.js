@@ -35,12 +35,11 @@ const t = getStoredToken();
 if (t) api.defaults.headers.common["Authorization"] = `Bearer ${t}`;
 
 // Billing endpoints
-export async function startCheckout(packageId) {
-  const { data } = await api.post('/billing/checkout', {
-    package_id: packageId,
-    origin_url: window.location.origin
+export async function startCheckout(priceId) {
+  const { data } = await api.post('/checkout', {
+    priceId: priceId
   });
-  return data.checkout_url || data.url;
+  return data.url;
 }
 
 export async function getPaymentStatus(sessionId) {

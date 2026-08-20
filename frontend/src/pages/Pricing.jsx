@@ -16,8 +16,8 @@ const FEATURES = [
 ];
 
 const STRIPE_PRICES = {
-  monthly: "price_MONTHLY_PRICE_ID_HERE", // Add your monthly price ID
-  yearly: "price_1TrEBTPazp0TRDgXjH0k3eYy"  // Live yearly price ID
+  monthly: "price_1TrEBTPazp0TRDgXZsELZMwa",  // $7 monthly subscription
+  yearly: "price_1TrEBTPazp0TRDgXjH0k3eYy"    // $59 yearly subscription
 };
 
 export default function Pricing() {

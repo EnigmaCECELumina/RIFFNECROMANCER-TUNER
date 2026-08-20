@@ -44,3 +44,12 @@ def get_stripe_lookup_key(package_id: Optional[str] = None) -> Optional[str]:
         candidate_names.insert(1, f"APEX_{package_token}_LOOKUP_KEY")
 
     return _first_env(*candidate_names)
+
+
+def get_stripe_product_id() -> str:
+    product_id = _first_env("STRIPE_PRODUCT_ID")
+    if not product_id:
+        raise RuntimeError(
+            "Missing required Stripe product ID env var. Set STRIPE_PRODUCT_ID."
+        )
+    return product_id

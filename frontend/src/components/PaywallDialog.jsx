@@ -6,14 +6,20 @@ import { startCheckout } from "@/lib/api";
 import { useNavigate } from "react-router-dom";
 import { toast } from "sonner";
 
+const PRICING_PACKAGES = {
+  monthly: "price_1TrEBTPazp0TRDgXZsELZMwa", // $7 monthly subscription
+  yearly: "price_1TrEBTPazp0TRDgXjH0k3eYy"    // $59 yearly subscription
+};
+
 export const PaywallDialog = ({ open, onOpenChange, lessonTitle }) => {
   const [loading, setLoading] = useState(null);
   const navigate = useNavigate();
 
-  const handleCheckout = async (packageId) => {
+  const handleCheckout = async (packageType) => {
     try {
-      setLoading(packageId);
-      const url = await startCheckout(packageId);
+      setLoading(packageType);
+      const priceId = PRICING_PACKAGES[packageType];
+      const url = await startCheckout(priceId, 'subscription');
       if (url) {
         window.location.href = url;
       } else {
@@ -59,7 +65,7 @@ export const PaywallDialog = ({ open, onOpenChange, lessonTitle }) => {
           </button>
 
           <button
-            onClick={() => handleCheckout("annual")}
+            onClick={() => handleCheckout("yearly")}
             disabled={!!loading}
             data-testid="paywall-annual-button"
             className="relative rounded-[var(--radius)] bg-[hsl(var(--brand))]/10 ring-1 ring-[hsl(var(--brand))]/35 hover:ring-[hsl(var(--brand))]/60 px-4 py-5 text-left transition-colors crimson-breathe"
